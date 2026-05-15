@@ -1,0 +1,27 @@
+# Hantera renderade webbfiler som binära så att git inte försöker merge:a dem
+# eller visa rad-för-rad-diffar (som ändå inte är begripliga för minifierad HTML/CSS/JS).
+*.html  binary
+*.htm   binary
+*.css   binary
+*.js    binary
+
+# Bilder och typsnitt — binära redan, men explicit är bra
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.svg   binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+
+# Säkerställ LF som radslut för textfiler (annars kan Windows-checkouts strula)
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.sh      text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf

@@ -1,0 +1,25 @@
+name: Deploy rapporter
+
+on:
+  push:
+    branches: [ publicera ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [ self-hosted, rapport ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy rapporter using server-side script
+        run: |
+          SOURCE_DIR="${GITHUB_WORKSPACE}/public"
+
+          if [ ! -d "$SOURCE_DIR" ]; then
+            echo "FEL: Hittar inte $SOURCE_DIR — finns mappen 'public/' i repot?" >&2
+            exit 1
+          fi
+
+          /usr/local/bin/rapport_deploy.sh "$SOURCE_DIR"
