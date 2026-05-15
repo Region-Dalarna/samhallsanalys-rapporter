@@ -2,52 +2,61 @@
 #
 # Pre-commit hook för samhallsanalys-rapporter.
 #
-# Varnar om HTML-filer som ska commitas i public/ verkar inaktuella
-# (filens mtime är äldre än några dagar). Syftet är att fånga upp
-# de fall där man glömt att rendera om rapporten innan commit.
+# För varje staged HTML-fil i public/<rapportnamn>/ letas en källfil
+# <rapportnamn>.qmd eller <rapportnamn>.Rmd upp i syster-repot
+# c:/gh/<rapportnamn>/ (samma föräldermapp som detta repo ligger i).
+# Om en sådan källfil finns OCH är nyare än HTML-filen avbryts commiten.
 #
-# Hooken kan kringgås med:  git commit --no-verify
+# Icke-interaktiv: avbryter direkt vid stale HTML, inga prompts.
+# Kringgås med `git commit --no-verify` om man medvetet vill commita en
+# gammal version.
 #
 # Aktiveras genom att köra (en gång per klon):
 #   git config core.hooksPath .githooks
 
 set -e
 
-STALE_THRESHOLD_DAYS=7
+repo_root=$(git rev-parse --show-toplevel)
+gh_root=$(dirname "$repo_root")
 
-# Hitta .html-filer som är staged i public/
 staged_html=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^public/.*\.html?$' || true)
+[[ -z "$staged_html" ]] && exit 0
 
-if [[ -z "$staged_html" ]]; then
-  exit 0
-fi
-
-now=$(date +%s)
-warnings=0
+errors=0
 
 while IFS= read -r file; do
   [[ -f "$file" ]] || continue
 
-  # Filens mtime (Linux: stat -c, macOS: stat -f)
-  mtime=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null || echo "$now")
-  age_days=$(( (now - mtime) / 86400 ))
+  # public/<rapportnamn>/index.html  →  <rapportnamn>
+  rel="${file#public/}"
+  rapportnamn="${rel%%/*}"
 
-  if (( age_days > STALE_THRESHOLD_DAYS )); then
-    echo "VARNING: $file är $age_days dagar gammal — har du glömt att rendera om?" >&2
-    warnings=$((warnings + 1))
+  # Leta källfil i syster-repot c:/gh/<rapportnamn>/
+  src=""
+  for ext in qmd Rmd rmd; do
+    cand="$gh_root/$rapportnamn/$rapportnamn.$ext"
+    if [[ -f "$cand" ]]; then
+      src="$cand"
+      break
+    fi
+  done
+
+  # Ingen källfil hittad — kan inte jämföra, hoppa över
+  [[ -z "$src" ]] && continue
+
+  html_mtime=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file")
+  src_mtime=$( stat -c %Y "$src"  2>/dev/null || stat -f %m "$src")
+
+  if (( html_mtime < src_mtime )); then
+    echo "FEL: $file är äldre än källfilen $src — rendera om innan commit." >&2
+    errors=$((errors + 1))
   fi
 done <<< "$staged_html"
 
-if (( warnings > 0 )); then
+if (( errors > 0 )); then
   echo "" >&2
-  echo "Hittade $warnings potentiellt inaktuell(a) HTML-fil(er)." >&2
-  echo "Fortsätt ändå? [y/N] " >&2
-  exec < /dev/tty
-  read -r answer
-  if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
-    echo "Commit avbruten." >&2
-    exit 1
-  fi
+  echo "Commit avbruten. Kör 'git commit --no-verify' om du medvetet vill commita ändå." >&2
+  exit 1
 fi
 
 exit 0
